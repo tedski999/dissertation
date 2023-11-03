@@ -1,0 +1,34 @@
+#!/bin/sh
+
+IMAGE=client.ext4
+
+cleanup() { test -n "$KERNELTMP" && rm -f "$KERNELTMP"; test -n "$INITRDTMP" && rm -f "$INITRDTMP"; }
+trap cleanup EXIT INT TERM QUIT
+KERNELTMP=$(mktemp)
+INITRDTMP=$(mktemp)
+/sbin/debugfs "$IMAGE" -R "cat boot/vmlinuz-6.5.0-3-cloud-amd64" > "$KERNELTMP"
+/sbin/debugfs "$IMAGE" -R "cat boot/initrd.img-6.5.0-3-cloud-amd64" > "$INITRDTMP"
+
+#-device "e1000,netdev=net0"
+#-netdev "user,id=net0,hostfwd=tcp::5555-:22"
+
+#-netdev "user,id=net0" \
+#-device "virtio-net-pci,netdev=net0" \
+
+
+qemu-system-x86_64 \
+	-append "root=LABEL=debvm rw console=ttyS0 TERM=xterm-256color" \
+	-netdev "user,id=net0,hostfwd=tcp:127.0.0.1:5555-:22" \
+	-device "virtio-net-pci,netdev=net0" \
+	-nographic \
+	-device "virtio-rng-pci,rng=rng0" \
+	-smp "8" \
+	-cpu "host" \
+	-machine "type=q35,accel=kvm:tcg" \
+	-no-user-config \
+	-name "debvm-run $IMAGE" \
+	-m "1G" \
+	-kernel "$KERNELTMP" \
+	-initrd "$INITRDTMP" \
+	-drive "media=disk,format=raw,discard=unmap,file=$IMAGE,if=virtio,cache=unsafe" \
+	-object "rng-random,filename=/dev/urandom,id=rng0"
