@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# Key pair to SSH into VMs
+[ -f ssh.key ] && [ -f ssh.key.pub ] || {
+	echo "Generating ssh.key keypair..."
+	ssh-keygen -N "" -f ssh.key || exit 1
+}
+
+[ -f base.img ] || {
+	echo "Generating base.img..."
+	debvm-create \
+		-h base -o base.img -r unstable -z 2GB -k ssh.key.pub \
+		-- "http://deb.debian.org/debian" "deb [trusted=yes] https://defo.ie/debian ./" \
+		--include libcurl4=8.4.0-2.1~1.gbp221d8f,curl=8.4.0-2.1~1.gbp221d8f \
+		--include ca-certificates,iproute2,iputils-ping,dnsutils,xxd || exit 1
+}
