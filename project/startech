@@ -1,5 +1,6 @@
 #!/bin/sh
 
+[ -z "$1" ] || [ -z "$2" ] && { echo "Usage: $0 <host> <mac>"; exit 1; }
 [ -f ssh.key ] && [ -f base.img ] || { echo "Run setup script first"; exit 1; }
 
 [ -f "$1.img" ] || {
@@ -31,4 +32,8 @@
 	wait
 }
 
-TERM=xterm-256color debvm-run -i "$1.img"
+echo "Starting ECH host '$1'..."
+# TODO: net1 breaks internet gateway sometimes
+TERM=xterm-256color debvm-run -i "$1.img" -- \
+	-device virtio-net-pci,netdev=net1,mac="$2" \
+	-netdev bridge,id=net1,br=br0

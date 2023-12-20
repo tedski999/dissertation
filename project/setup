@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# TODO: read from file containing network configuration
+
 # Key pair to SSH into VMs
 [ -f ssh.key ] && [ -f ssh.key.pub ] || {
 	echo "Generating ssh.key keypair..."
@@ -14,3 +16,6 @@
 		--include libcurl4=8.4.0-2.1~1.gbp221d8f,curl=8.4.0-2.1~1.gbp221d8f \
 		--include ca-certificates,iproute2,iputils-ping,dnsutils,xxd || exit 1
 }
+
+# ip link add name br0 type bridge
+# ip link set dev br0 up
