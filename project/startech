@@ -17,6 +17,14 @@
 	ech=\$(cat ech/$1.pem | tail -2 | head -1 | base64 -d | xxd -ps -c 200 | tr -d '\\n')
 	echo 0001000005\$(printf '%04x' \$((\${#ech}/2)))\$ech > ech/$1.rr
 
+	# TODO: ip argument
+	mkdir -p /etc/systemd/resolved.conf.d
+	cat <<EOF > /etc/systemd/resolved.conf.d/dns.conf
+[Resolve]
+DNS=172.20.189.68
+FallbackDNS=172.20.189.68
+EOF
+
 	# TODO: broken
 	apt install --assume-yes nginx-light=1.24.0-2.1~1.gbp4eef3c
 	rm /etc/nginx/sites-enabled/default
@@ -35,5 +43,5 @@
 echo "Starting ECH host '$1'..."
 # TODO: net1 breaks internet gateway sometimes
 TERM=xterm-256color debvm-run -i "$1.img" -- \
-	-device virtio-net-pci,netdev=net1,mac="$2" \
-	-netdev bridge,id=net1,br=br0
+	-device virtio-net-pci,netdev=net2,mac="$2" \
+	-netdev bridge,id=net2,br=br0

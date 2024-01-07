@@ -1,6 +1,8 @@
 #!/bin/sh
 
 # TODO: read from file containing network configuration
+# TODO: create and configure network bridge
+# TODO: static ips?
 
 # Key pair to SSH into VMs
 [ -f ssh.key ] && [ -f ssh.key.pub ] || {
@@ -17,5 +19,8 @@
 		--include ca-certificates,iproute2,iputils-ping,dnsutils,xxd || exit 1
 }
 
+# Network bridge
 # ip link add name br0 type bridge
+# ip addr add 172.20.0.1/16 dev br0
 # ip link set dev br0 up
+# dnsmasq --interface=br0 --bind-interfaces --dhcp-range=172.20.0.2,172.20.255.254

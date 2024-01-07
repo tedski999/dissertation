@@ -1,0 +1,46 @@
+#!/bin/sh
+
+[ -z "$1" ] || [ -z "$2" ] && { echo "Usage: $0 <host> <mac>"; exit 1; }
+[ -f ssh.key ] && [ -f base.img ] || { echo "Run setup script first"; exit 1; }
+
+[ -f "$1.img" ] || {
+	echo "Setting up new DNS host '$1'..."
+	cp base.img $1.img || exit 1
+	debvm-run -i $1.img -s 2222 -g -- -display none &
+	debvm-waitssh 2222 || exit 1
+	ssh -i ssh.key -p 2222 -o NoHostAuthenticationForLocalhost=yes root@127.0.0.1 "
+	hostnamectl set-hostname $1
+	sed -i 's/base/$1/g' /etc/hosts
+
+	mkdir -p /etc/systemd/resolved.conf.d
+	cat <<EOF > /etc/systemd/resolved.conf.d/dns.conf
+[Resolve]
+DNSStubListener=no
+DNS=127.0.0.1
+FallbackDNS=127.0.0.1
+EOF
+
+	# TODO: generalise dnsmasq configuration
+	apt install --assume-yes dnsmasq
+	mkdir -p /etc/dnsmasq.d
+	cat <<EOF > /etc/dnsmasq.d/example.conf
+no-resolv
+no-hosts
+auth-server=ns.example.com,ns2.example.com
+auth-zone=example.com
+auth-sec-servers=ns2.example.com
+auth-soa=42,admin.example.com
+host-record=foo.example.com,172.20.189.64
+host-record=hidden.foo.example.com,172.20.189.64
+dns-rr=hidden.foo.example.com,65,0042fe0d003ee100200020d7982e3c64e4a70135b0b89bd209891b57bac6f4d36354834f92de84302ff751000400010001000f666f6f2e6578616d706c652e636f6d0000
+EOF
+
+	shutdown now" || exit 1
+	wait
+}
+
+echo "Starting DNS host '$1'..."
+# TODO: net1 breaks internet gateway sometimes
+TERM=xterm-256color debvm-run -i "$1.img" -- \
+	-device virtio-net-pci,netdev=net1,mac="$2" \
+	-netdev bridge,id=net1,br=br0
