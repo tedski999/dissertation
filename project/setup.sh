@@ -1,7 +1,6 @@
 #!/bin/bash
 
-hash sudo ssh ssh-keygen debvm-create debvm-run debvm-waitssh openssl || exit 1
-
+hash sudo ssh ssh-keygen debvm-create debvm-run debvm-waitssh ip || exit 1
 msg() { printf "\n\033[1;33m$@\033[0m\n"; }
 
 config=$(<"$1") || exit 1
@@ -43,6 +42,7 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 			MACAddress=42:ee:ee:ee:ee:ee
 			[Network]
 			DNS=172.0.0.254
+
 			Address=172.0.0.253/24
 			[Route]
 			Gateway=0.0.0.0
@@ -72,11 +72,41 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 			Gateway=0.0.0.0
 			Destination=0.0.0.0/0
 			Metric=9999' > /etc/systemd/network/00-debvm.network
+
+		# TODO: dnsmasq, or bind?
+
 		shutdown now
 	" || exit 1
 	wait
 }
 
+while IFS=, read -r host mac ip score vhosts; do
+	[ -f "$host.img" ] || {
+		msg "Configuring $host VM image..."
+		cp base.img "$host.img" || exit 1
+		debvm-run --image "$host.img" --sshport 2222 --graphical -- -display none &
+		debvm-waitssh --timeout 10 2222 || exit 1
+		ssh -o NoHostAuthenticationForLocalhost=yes -i ssh.key -p 2222 root@127.0.0.1 "
+			hostnamectl set-hostname $host &&
+				sed -i 's/base/$host/g' /etc/hosts ||
+				sleep infinity
+			echo '
+				[Match]
+				MACAddress=$mac
+				[Network]
+				DNS=172.0.0.254
+				Address=$ip/24
+				[Route]
+				Gateway=0.0.0.0
+				Destination=0.0.0.0/0
+				Metric=9999' > /etc/systemd/network/00-debvm.network
+			#TODO:nginx
+			" || exit 1
+		wait
+	}
+done < $config || exit 1
+
+# TODO: slow
 msg "Booting up VMs..."
 while IFS=, read -r host mac _; do
 	$TERMINAL -e $SHELL -c "TERM=xterm-256color debvm-run --image $host.img -- \
