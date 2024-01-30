@@ -23,11 +23,25 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 
 [ -f base.img ] || {
 	msg "Generating base VM image..."
-	debvm-create \
-		-h base -o base.img -r unstable -z 3GB -k ssh.key.pub \
-		-- "http://deb.debian.org/debian" "deb [trusted=yes] https://defo.ie/debian ./" \
-		--include libcurl4=8.4.0-2.1~1.gbp221d8f,curl=8.4.0-2.1~1.gbp221d8f \
-		--include ca-certificates,iproute2,iputils-ping,dnsutils || exit 1
+	debvm-create -h base -o base.img -r unstable -z 5GB -k ssh.key.pub -- \
+		--include ca-certificates,build-essential,dh-autoreconf,git,openssl \
+		--include libpsl-dev,libpcre3-dev,libz-dev || exit 1
+	debvm-run --image base.img --sshport 2222 --graphical -- -display none &
+	debvm-waitssh --timeout 10 2222 || exit 1
+	ssh -o NoHostAuthenticationForLocalhost=yes -i ssh.key -p 2222 root@127.0.0.1 "
+		git clone -b ECH-draft-13c https://github.com/sftcd/openssl.git ~/openssl &&
+			cd ~/openssl &&
+			./config &&
+			make -j8 ||
+			sleep infinity
+		LD_LIBRARY_PATH=~/openssl ~/openssl/apps/openssl req -x509 \
+			-newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -days 3650 -nodes \
+			-keyout /root.key -out /root.crt -subj '/CN=root.example.com' &&
+			chmod +r /root.key ||
+			sleep infinity
+		shutdown now
+	" || exit 1
+	wait
 }
 
 [ -f client.img ] || {
