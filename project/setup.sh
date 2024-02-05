@@ -21,6 +21,7 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 	sudo ip link set dev br0 up || exit 1
 }
 
+# TODO: run prefixed installs
 [ -f base.img ] || {
 	msg "Generating base VM image..."
 	debvm-create -h base -o base.img -r unstable -z 5GB -k ssh.key.pub -- \
@@ -38,6 +39,17 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 			-newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -days 3650 -nodes \
 			-keyout /root.key -out /root.crt -subj '/CN=root.example.com' &&
 			chmod +r /root.key ||
+			sleep infinity
+		git clone -b ECH-experimental https://github.com/sftcd/curl.git ~/curl &&
+			cd ~/curl &&
+			autoreconf -fi &&
+			LD_LIBRARY_PATH=~/openssl LDFLAGS=-L~/openssl ./configure --with-ssl=\$HOME/openssl --enable-ech --enable-httpsrr &&
+			LD_LIBRARY_PATH=~/openssl make -j8 ||
+			sleep infinity
+		git clone -b ECH-experimental https://github.com/sftcd/nginx.git ~/nginx &&
+			cd ~/nginx &&
+			./auto/configure --with-http_ssl_module --with-stream --with-stream_ssl_module --with-stream_ssl_preread_module --with-http_v2_module --with-cc-opt=-I\$HOME/openssl/include --with-ld-opt=-L\$HOME/openssl &&
+			make -j8 ||
 			sleep infinity
 		shutdown now
 	" || exit 1
@@ -114,8 +126,44 @@ while IFS=, read -r host mac ip score vhosts; do
 				Gateway=0.0.0.0
 				Destination=0.0.0.0/0
 				Metric=9999' > /etc/systemd/network/00-debvm.network
-			#TODO:nginx
+			mkdir -p ~/site/nginx/logs || sleep infinity
+			# TODO: ech keys in ssl_echkeydir ech;
+			# TODO: configure ECH nginx split mode
+			echo '
+				worker_processes 1;
+				error_log logs/error.log info;
+				events { worker_connections 1024; }
+				http {
+					access_log logs/access.log combined;' > ~/site/nginx.conf
+		" || exit 1
+		for vhost in ${vhosts//,/ }; do
+			vhost=${vhost%:*}
+			ssh -o NoHostAuthenticationForLocalhost=yes -i ssh.key -p 2222 root@127.0.0.1 "
+				mkdir -p ~/site/nginx/$vhost &&
+					echo 'Welcome to $vhost' > ~/site/nginx/$vhost/index.html ||
+					sleep infinity
+				LD_LIBRARY_PATH=~/openssl ~/openssl/apps/openssl req -x509 \
+					-newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -days 3650 -nodes \
+					-keyout /$vhost.key -out /$vhost.crt -subj '/CN=$vhost.$host.example.com' \
+					-CA /root.crt -CAkey /root.key -addext 'subjectAltName=DNS:$vhost.$host.example.com,IP:$ip' &&
+					chmod +r /$vhost.key ||
+					sleep infinity
+				echo '
+					server {
+						listen 443 ssl;
+						http2 on;
+						ssl_certificate /$vhost.crt;
+						ssl_certificate_key /$vhost.key;
+						ssl_protocols TLSv1.3;
+						server_name $vhost.$host.example.com;
+						location / { root $vhost; index index.html index.htm; }
+					}' >> ~/site/nginx.conf
 			" || exit 1
+		done
+		ssh -o NoHostAuthenticationForLocalhost=yes -i ssh.key -p 2222 root@127.0.0.1 "
+			echo '}' >> ~/site/nginx.conf
+			shutdown now
+		" || exit 1
 		wait
 	}
 done < $config || exit 1
