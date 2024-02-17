@@ -35,15 +35,16 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 			./config &&
 			make -j8 ||
 			sleep infinity
-		LD_LIBRARY_PATH=~/openssl ~/openssl/apps/openssl req -x509 \
-			-newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -days 3650 -nodes \
-			-keyout /root.key -out /root.crt -subj '/CN=root.example.com' &&
-			chmod +r /root.key ||
-			sleep infinity
 		git clone -b ECH-experimental https://github.com/sftcd/curl.git ~/curl &&
 			cd ~/curl &&
 			autoreconf -fi &&
 			LD_LIBRARY_PATH=~/openssl LDFLAGS=-L~/openssl ./configure --with-ssl=\$HOME/openssl --enable-ech --enable-httpsrr &&
+			LD_LIBRARY_PATH=~/openssl make -j8 ||
+			sleep infinity
+		git clone -b v9.18.25-release https://gitlab.isc.org/isc-projects/bind9 ~/bind9 &&
+			cd ~/bind9 &&
+			autoreconf -fi &&
+			LD_LIBRARY_PATH=~/openssl LDFLAGS=-L~/openssl ./configure --with-ssl=\$HOME/openssl &&
 			LD_LIBRARY_PATH=~/openssl make -j8 ||
 			sleep infinity
 		git clone -b ECH-experimental https://github.com/sftcd/nginx.git ~/nginx &&
@@ -51,6 +52,12 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 			./auto/configure --with-http_ssl_module --with-stream --with-stream_ssl_module --with-stream_ssl_preread_module --with-http_v2_module --with-cc-opt=-I\$HOME/openssl/include --with-ld-opt=-L\$HOME/openssl &&
 			make -j8 ||
 			sleep infinity
+		LD_LIBRARY_PATH=~/openssl ~/openssl/apps/openssl req -x509 \
+			-newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -days 3650 -nodes \
+			-keyout /root.key -out /root.crt -subj '/CN=root.example.com' &&
+			chmod +r /root.key ||
+			sleep infinity
+		# TODO: mount directory would let ossl certs+ech keys gen here then only config on host needed for mounts
 		shutdown now
 	" || exit 1
 	wait
@@ -98,9 +105,28 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 			Gateway=0.0.0.0
 			Destination=0.0.0.0/0
 			Metric=9999' > /etc/systemd/network/00-debvm.network
-
-		# TODO: dnsmasq, or bind?
-
+		LD_LIBRARY_PATH=~/openssl ~/openssl/apps/openssl req -x509 \
+			-newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -days 3650 -nodes \
+			-keyout /dns.key -out /dns.crt -subj '/CN=dns.example.com' \
+			-CA /root.crt -CAkey /root.key -addext 'subjectAltName=DNS:dns.example.com,IP:172.0.0.254' &&
+			chmod +r /dns.key ||
+			sleep infinity
+		echo '
+			tls local-tls { key-file \"/dns.key\"; cert-file \"/dns.crt\"; };
+			options { directory \"/var/cache/bind\"; listen-on { any; }; listen-on port 443 tls local-tls http default { any; }; dnssec-validation auto; };
+			zone \"example.com\" { type master; file \"db.example.com\"; };' > /named.conf
+		echo '\$TTL 3600' > /db.example.com
+		echo '@ IN SOA dns.example.com. root.dns.example.com. ( 2007010401 3600 600 86400 600 )' >> /db.example.com
+		echo '@ IN NS dns.example.com.' >> /db.example.com
+	" || exit 1
+	while IFS=, read -r host mac ip score vhosts; do
+		for vhost in ${vhosts//,/ }; do
+			ssh -o NoHostAuthenticationForLocalhost=yes -i ssh.key -p 2222 root@127.0.0.1 "
+				echo '$vhost.$host IN A $ip' >> /db.example.com
+			" || exit 1
+		done
+	done < $config || exit 1
+	ssh -o NoHostAuthenticationForLocalhost=yes -i ssh.key -p 2222 root@127.0.0.1 "
 		shutdown now
 	" || exit 1
 	wait
@@ -175,3 +201,7 @@ while IFS=, read -r host mac _; do
 		-device virtio-net-pci,netdev=net1,mac=$mac \
 		-netdev bridge,id=net1,br=br0" &
 done < $config || exit 1
+
+# TODO: autostart in background
+# cd $HOME/site && $HOME/nginx/objs/nginx -c $HOME/site/nginx.conf
+# LD_LIBRARY_PATH=$HOME/openssl $HOME/curl/src/curl --cacert /root.crt https://a.ucd.example.com
