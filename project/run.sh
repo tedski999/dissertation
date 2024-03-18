@@ -5,10 +5,9 @@ msg() { printf "\n\033[1;33m$@\033[0m\n"; }
 pkill qemu-system-x86
 
 # Parse provided config
-dir="$1" || exit 1
+dir="$1"
 network_cfg="$(<"$2")" || exit 1
 server_cfgs="$(<"$3")" || exit 1
-client_cfgs="$(<"$4")" || exit 1
 read -d "" domain dns_host dns_mac dns_ip <<< "$network_cfg"
 mkdir -p "$dir" || exit 1
 
@@ -73,7 +72,7 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 
 	# Graceful shutdown
 	cd / && umount /mnt || exit 1
-	shutdown now" || exit 1
+	shutdown now"
 
 	echo "$cmds"
 	qemu-img create "$dir/build.img" 2G || exit 1
@@ -81,7 +80,7 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 		-display none -drive file="$dir/build.img",format=raw,if=virtio,readonly=off &
 	debvm-waitssh 2222 || exit 1
 	ssh -o NoHostAuthenticationForLocalhost=yes -i "$dir/ssh.key" -p 2222 root@127.0.0.1 "$cmds" || exit 1
-	wait || exit 1
+	wait
 }
 
 # Generate base VM image
@@ -109,12 +108,11 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 		-in /keys/$dns_host.csr -out /keys/$dns_host.crt || exit 1
 	chmod +r /keys/{root,$dns_host}.key || exit 1"
 
-	for server_cfg in $server_cfgs; do IFS=, read host _ ip _ _ sites <<< $server_cfg
+	for server_cfg in $server_cfgs; do IFS=, read host _ ip _ sites <<< $server_cfg
 		cmds="$cmds
 		# Generate $host WireGuard and ECH keypair
 		mkdir -p /keys/$host || exit 1
-		wg genkey | tee /keys/$host/wg0.key | wg pubkey > /keys/$host/wg0.key.pub || exit 1
-		wg genkey | tee /keys/$host/wg1.key | wg pubkey > /keys/$host/wg1.key.pub || exit 1
+		wg genkey | tee /keys/$host/wg.key | wg pubkey > /keys/$host/wg.key.pub || exit 1
 		LD_LIBRARY_PATH=/mnt/openssl/lib64 /mnt/openssl/bin/openssl ech \\
 			-public_name $host.$domain -pemout /keys/$host/key.ech"
 		for site in ${sites//,/ }; do
@@ -128,13 +126,13 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 				-extfile <(printf 'subjectAltName=DNS:$site.$domain,IP:$ip') \\
 				-in /keys/$host/$site.csr -out /keys/$host/$site.crt || exit 1
 			chmod +r /keys/$host/$site.key || exit 1"
-		done || exit 1
-	done || exit 1
+		done
+	done
 
 	cmds="$cmds
 	# Graceful shutdown
 	cd && umount /mnt || exit 1
-	shutdown now" || exit 1
+	shutdown now"
 
 	echo "$cmds"
 	debvm-create -h base -o "$dir/base.img" -r unstable -z 1GB -k "$dir/ssh.key.pub" -- \
@@ -143,7 +141,7 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 		-display none -drive file="$dir/build.img",format=raw,if=virtio,readonly=on &
 	debvm-waitssh 2222 || exit 1
 	ssh -o NoHostAuthenticationForLocalhost=yes -i "$dir/ssh.key" -p 2222 root@127.0.0.1 "$cmds" || exit 1
-	wait || exit 1
+	wait
 }
 
 # Set DNS server configuration
@@ -179,23 +177,25 @@ zone \"$domain\" {
 @ IN SOA $dns_host root.$dns_host 2007010401 3600 600 86400 600
 @ IN NS $dns_host
 $dns_host IN A $dns_ip"
-for server_cfg in $server_cfgs; do IFS=, read host _ ip _ _ sites <<< $server_cfg
+for server_cfg in $server_cfgs; do IFS=, read host _ ip _ sites <<< $server_cfg
 	cmds="$cmds"$'\n'"$host.ech IN A $ip"
 	for site in ${sites//,/ }; do
 		for p_server_cfg in $server_cfgs; do IFS=, read p_host _ <<< $p_server_cfg
-			cmds="$cmds"$'\n'"$site IN HTTPS 1 $p_host.ech ech='\$(tail -2 /keys/$p_host/key.ech | head -1)'"
+			[ "$host" != "$p_host" ] && {
+				cmds="$cmds"$'\n'"$site IN HTTPS 1 $p_host.ech ech='\$(tail -2 /keys/$p_host/key.ech | head -1)'"
+			}
 		done
-	done || exit 1
-done || exit 1
+	done
+done
 cmds="$cmds' || exit 1"
 
-declare "${dns_host}_cmds=$cmds" || exit 1
+declare "${dns_host}_cmds=$cmds"
 
 # Set TLS servers configuration
-for server_cfg in $server_cfgs; do IFS=, read host _ ip wg0 _ sites <<< $server_cfg
+for server_cfg in $server_cfgs; do IFS=, read host _ ip wg sites <<< $server_cfg
 	cmds="
 	# Install dependencies
-	apt-get --yes install wireguard netcat-openbsd || exit 1
+	apt-get --yes install wireguard tcpdump || exit 1
 
 	# Configure WireGuard
 	>/etc/systemd/network/00-wg0.netdev echo '
@@ -204,17 +204,13 @@ for server_cfg in $server_cfgs; do IFS=, read host _ ip wg0 _ sites <<< $server_
 	Kind=wireguard
 	[WireGuard]
 	ListenPort=51820
-	PrivateKey='\"\$(cat /keys/$host/wg0.key)\"'"
-	for p_server_cfg in $server_cfgs; do IFS=, read p_host _ p_ip p_wg0 p_wg1 _ <<< $p_server_cfg
+	PrivateKey='\"\$(cat /keys/$host/wg.key)\"'"
+	for p_server_cfg in $server_cfgs; do IFS=, read p_host _ p_ip p_wg _ <<< $p_server_cfg
 		[ "$host" != "$p_host" ] && {
 			cmds="$cmds
 			[WireGuardPeer]
-			PublicKey='\"\$(cat /keys/$p_host/wg0.key.pub)\"'
-			AllowedIPs=$p_wg0/32
-			Endpoint=$p_ip:51820
-			[WireGuardPeer]
-			PublicKey='\"\$(cat /keys/$p_host/wg1.key.pub)\"'
-			AllowedIPs=$p_wg1/32
+			PublicKey='\"\$(cat /keys/$p_host/wg.key.pub)\"'
+			AllowedIPs=$p_wg/32
 			Endpoint=$p_ip:51820"
 		}
 	done
@@ -223,7 +219,7 @@ for server_cfg in $server_cfgs; do IFS=, read host _ ip wg0 _ sites <<< $server_
 	[Match]
 	Name=wg0
 	[Network]
-	Address=$wg0/24' || exit 1
+	Address=$wg/24' || exit 1
 
 	# Configure NGINX
 	mkdir -p /site/nginx/logs || exit 1
@@ -240,9 +236,9 @@ for server_cfg in $server_cfgs; do IFS=, read host _ ip wg0 _ sites <<< $server_
 		ssl_echkeydir /keys/$host;
 		server { listen $ip:443; proxy_pass \$backend; }
 		map \$ssl_preread_server_name \$backend {"
-	for p_server_cfg in $server_cfgs; do IFS=, read _ _ _ p_wg0 _ p_sites <<< $p_server_cfg
+	for p_server_cfg in $server_cfgs; do IFS=, read _ _ _ p_wg p_sites <<< $p_server_cfg
 		for p_site in ${p_sites//,/ }; do
-			cmds="$cmds $p_site.$domain $p_wg0:443;"
+			cmds="$cmds $p_site.$domain $p_wg:443;"
 		done
 	done
 	cmds="$cmds
@@ -256,14 +252,14 @@ for server_cfg in $server_cfgs; do IFS=, read host _ ip wg0 _ sites <<< $server_
 		server {
 			root /site/$site;
 			server_name $site.$domain;
-			listen $wg0:443 ssl;
+			listen $wg:443 ssl;
 			http2 on;
 			ssl_certificate /keys/$host/$site.crt;
 			ssl_certificate_key /keys/$host/$site.key;
 			ssl_protocols TLSv1.3;
 			location / { ssi on; index index.html index.htm; }
 		}"
-	done || exit 1
+	done
 	cmds="$cmds
 	}' || exit 1"
 
@@ -279,6 +275,7 @@ for server_cfg in $server_cfgs; do IFS=, read host _ ip wg0 _ sites <<< $server_
 				<title>$site.$domain</title>
 			</head>
 			<body>
+				<img src=\"/image.png\" width=\"300\" height=\"300\">
 				<p>
 					Welcome to <b>$site.$domain</b><br/>
 					Got here via <i><!--# echo var=\"remote_addr\" --></i>
@@ -287,49 +284,39 @@ for server_cfg in $server_cfgs; do IFS=, read host _ ip wg0 _ sites <<< $server_
 					<li>SNI: <!--# echo var=\"ssl_server_name\" --></li>
 					<li>HTTP host: <!--# echo var=\"http_host\" --></li>
 					<li>ALPN protocol: <!--# echo var=\"ssl_alpn_protocol\" --></li>
-				</ul>"
-		for p_server_cfg in $server_cfgs; do IFS=, read p_host _ p_ip _ _ p_sites <<< $p_server_cfg
+				</ul>
+				<form action=\"/pkglist\">
+					<input type=\"submit\" value=\"Download pkglist\" />
+				</form>"
+		for p_server_cfg in $server_cfgs; do IFS=, read p_host _ p_ip _ p_sites <<< $p_server_cfg
 			cmds="$cmds<p>Sites on $p_host ($p_ip):"
 			for p_site in ${p_sites//,/ }; do
 				cmds="$cmds<br/><a href=\"https://$p_site.$domain\">$p_site.$domain</a>"
 				[ "$site" = "$p_site" ] && cmds="$cmds *" || true
-			done || exit 1
+			done
 			cmds="$cmds</p>"
-		done || exit 1
+		done
 		cmds="$cmds
 			</body>
-		</html>' || exit 1"
-	done || exit 1
+		</html>' || exit 1
+		ln -s /mnt/src/openssl/doc/images/openssl-square-nontransparent.png /site/$site/image.png || exit 1
+		ln -s /var/lib/apt/lists/deb.debian.org_debian_dists_unstable_main_binary-amd64_Packages /site/$site/pkglist || exit 1"
+	done
 
 	cmds="$cmds
-	# Service to pad traffic between WireGuard peers
+	# WireGuard traffic padding service
 	>/site/padding.sh echo '#!/bin/bash
-	tc qdisc replace dev enp0s6 root netem slot 25ms 75ms"
-	for p_server_cfg in $server_cfgs; do IFS=, read p_host _ _ p_wg0 p_wg1 _ <<< $p_server_cfg
+	tc qdisc replace dev enp0s6 root netem slot 100ms 200ms
+	tcpdump -i wg0 -nnqt ip and src $wg | while read _ _ _ dst _ len; do"
+	for p_server_cfg in $server_cfgs; do IFS=, read _ _ _ p_wg _ <<< $p_server_cfg
 		cmds="$cmds
-		while true; do
-			# TODO: can we record, send, record and subtract from total?
-			# new_tx=\$(wg show wg0 transfer | awk '\$1 == \"'\$p_id'\" {print \$3}')
-			# tx=\$((\$new_tx - \${old_tx:-\$new_tx}))
-			# [ \$tx -gt 0 ] && {"
-		# for pp_server_cfg in $server_cfgs; do IFS=, read _ _ _ _ pp_wg1 _ <<< $pp_server_cfg
-		#	[ "$p_wg1" != "$pp_wg1" ] && {
-		#		cmds="$cmds
-		#		dd if=/dev/urandom bs=1 count=\$((\$RANDOM%10 + 1)) >/dev/udp/$pp_wg/1234"
-		#	}
-		# done
-		cmds="$cmds
-			# }
-			# old_tx=\$new_tx
-			sleep 0.25
-		done &"
+		[ \"$p_wg\" != \"\${dst%.*}\" ] && dd status=none if=/dev/urandom bs=\$len count=1 >/dev/udp/$p_wg/12345 &"
 	done
 	cmds="$cmds
-	wait' || exit 1
+	done' || exit 1
 	>/site/padding.service echo '
 	[Unit]
 	After=network-online.target
-	Wants=network-online.target
 	[Service]
 	ExecStart=/site/padding.sh
 	Restart=always
@@ -341,18 +328,12 @@ for server_cfg in $server_cfgs; do IFS=, read host _ ip wg0 _ sites <<< $server_
 	cp /site/padding.service /mnt/nginx/nginx.service /etc/systemd/system || exit 1
 	systemctl daemon-reload && systemctl enable padding nginx || exit 1"
 
-	declare "${host}_cmds=$cmds" || exit 1
-done
-
-# Set TLS clients configuration
-for client_cfg in $client_cfgs; do IFS=, read host mac ip <<< $client_cfg
-	cmds=""
 	declare "${host}_cmds=$cmds"
 done
 
 # Generate all VM images in parallel
 port=2222
-for cfg in "$dns_host,$dns_mac,$dns_ip" $server_cfgs $client_cfgs; do IFS=, read host mac ip _ <<< $cfg
+for cfg in "$dns_host,$dns_mac,$dns_ip" $server_cfgs; do IFS=, read host mac ip _ <<< $cfg
 	port="$((port+1))"
 	[ -f "$dir/$host.img" ] || {
 		msg "Generating $host.img:"
@@ -390,7 +371,7 @@ for cfg in "$dns_host,$dns_mac,$dns_ip" $server_cfgs $client_cfgs; do IFS=, read
 
 		# Graceful shutdown
 		cd && umount /mnt || exit 1
-		shutdown now" || exit 1
+		shutdown now"
 
 		echo "$cmds"
 		cp "$dir/base.img" "$dir/$host.img" || exit 1
@@ -403,7 +384,8 @@ done
 wait
 
 port=2222
-for cfg in "$dns_host,$dns_mac" $server_cfgs $client_cfgs; do IFS=, read host mac _ <<< $cfg
+for cfg in "$dns_host,$dns_mac" $server_cfgs; do IFS=, read host mac _ <<< $cfg
+	sleep 1
 	port="$((port+1))"
 	{
 		msg "Booting up host $host..."
@@ -416,10 +398,9 @@ for cfg in "$dns_host,$dns_mac" $server_cfgs $client_cfgs; do IFS=, read host ma
 		wait
 		msg "Host $host has shutdown"
 	} &
-	sleep 0.5
-done || exit 1
+done
 wait
-pkill qemu-system-x86
+killall debvm-run qemu-system-x86_64
 
 
 # curl --verbose --cacert /keys/root.crt --ech hard --doh-url https://dns.example.com/dns-query https://a.tcd.example.com
