@@ -1,0 +1,18 @@
+@ IN SOA dns root.dns 2024040100 3600 600 86400 600
+@ IN NS dns
+
+dcu.ech.example.com. IN A 172.0.0.2
+tcd.ech.example.com. IN A 172.0.0.5
+ucd.ech.example.com. IN A 172.0.0.8
+
+dcu.example.com. IN HTTPS 1 dcu.ech.example.com. ech=<DCU ECHConfig>
+dcu.example.com. IN HTTPS 1 tcd.ech.example.com. ech=<TCD ECHConfig>
+dcu.example.com. IN HTTPS 1 ucd.ech.example.com. ech=<UCD ECHConfig>
+
+tcd.example.com. IN HTTPS 1 dcu.ech.example.com. ech=<DCU ECHConfig>
+tcd.example.com. IN HTTPS 1 tcd.ech.example.com. ech=<TCD ECHConfig>
+tcd.example.com. IN HTTPS 1 ucd.ech.example.com. ech=<UCD ECHConfig>
+
+ucd.example.com. IN HTTPS 1 dcu.ech.example.com. ech=<DCU ECHConfig>
+ucd.example.com. IN HTTPS 1 tcd.ech.example.com. ech=<TCD ECHConfig>
+ucd.example.com. IN HTTPS 1 ucd.ech.example.com. ech=<UCD ECHConfig>

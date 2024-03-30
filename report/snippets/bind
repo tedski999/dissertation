@@ -1,0 +1,18 @@
+tls tlspair {
+	key-file "/keys/dns.key";
+	cert-file "/keys/dns.crt";
+};
+
+options {
+	directory "/var/cache/bind";
+	recursion no;
+	dnssec-validation auto;
+	allow-transfer { none; };
+	listen-on { any; };
+	listen-on port 443 tls tlspair http default { any; };
+};
+
+zone "example.com" {
+	type master;
+	file "/var/lib/bind/db.example.com";
+};

@@ -1,0 +1,33 @@
+pid /run/nginx.pid;
+worker_processes 1;
+events { worker_connections 1024; }
+
+stream {
+	access_log logs/access.log basic;
+	ssl_preread on;
+	ssl_echkeydir /keys/tcd;
+	server {
+		listen 172.0.0.1:443;
+		proxy_pass $backend;
+	}
+	map $ssl_preread_server_name $backend {
+		dcu.example.com 172.0.1.2:443;
+		ucd.example.com 172.0.1.8:443;
+	}
+}
+
+http {
+	server {
+		root /site/tcd;
+		server_name tcd.example.com;
+		listen 172.0.1.5:443 ssl;
+		http2 on;
+		ssl_certificate /keys/tcd/tcd.crt;
+		ssl_certificate_key /keys/tcd/tcd.key;
+		ssl_protocols TLSv1.3;
+		location / {
+			ssi on;
+			index index.html index.htm;
+		}
+	}
+}

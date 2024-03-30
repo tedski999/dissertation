@@ -1,0 +1,89 @@
+\documentclass[a4paper,oneside,12pt]{book}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[a4paper,top=2.54cm,bottom=2.54cm,left=2.54cm,right=2.54cm,headheight=16pt]{geometry}
+\usepackage{amsmath}
+\usepackage[autostyle=true]{csquotes}
+\usepackage[pdftex]{graphicx}
+\usepackage[colorlinks=true, allcolors=black]{hyperref}
+\usepackage{hyperxmp}
+\usepackage{caption}
+\usepackage{sfmath}
+\usepackage[parfill]{parskip}
+\usepackage{setspace}
+\usepackage{enumerate}
+\usepackage{booktabs}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[section,newfloat]{minted}
+\usepackage{chngcntr}
+\usepackage[backend=biber, style=numeric-comp, sorting=none]{biblatex}
+\usepackage{xurl}
+\usepackage{blindtext}
+
+\addbibresource{references.bib}
+
+\setlength{\marginparwidth}{2cm}
+\pagestyle{plain}
+\counterwithin{figure}{section}
+\renewcommand{\familydefault}{\sfdefault}
+
+\titleformat{\chapter}[hang]{\normalfont\huge\bfseries}{\thechapter}{1cm}{}{}
+\title{A distributed deployment model for Encrypted Client Hello}
+\author{Ted Johnson}
+
+\begin{document}
+
+\hypersetup{
+	pdftitle=A distributed deployment model for Encrypted Client Hello,
+	pdfauthor=Ted Johnson,
+	pdfsubject=Master in Computer Science (MCS),
+	pdfinfo={pdfsupervisor=Dr Stephen Farrell},
+	colorlinks=true,
+	linkcolor=black,
+	citecolor=blue,
+	filecolor=blue,
+	urlcolor=blue
+}
+\urlstyle{same}
+\definecolor{bg}{rgb}{0.95,0.95,0.95}
+\setminted{
+	bgcolor=bg,
+	fontsize=\footnotesize,
+	linenos=true,
+	numbersep=5pt,
+	tabsize=4
+}
+
+\frontmatter
+\input{title.tex}
+\input{declaration.tex}
+\input{abstract.tex}
+\newpage
+\onehalfspacing
+\raggedright
+\input{acknowledgements.tex}
+
+% nomeclature?
+\tableofcontents
+\listoffigures
+% \listoftables
+\listoflistings
+\newpage
+
+\mainmatter
+\input{introduction.tex}
+\input{background.tex}
+\input{design.tex}
+\input{implementation.tex}
+\input{results.tex}
+\input{conclusion.tex}
+\printbibliography
+
+\appendix
+\renewcommand{\thechapter}{A\arabic{chapter}}
+\input{appendix.tex}
+
+\end{document}
