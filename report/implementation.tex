@@ -21,7 +21,7 @@ qemu+debvm
 
 \begin{listing}[ht]
 \inputminted{bash}{snippets/build.bash}
-\caption{TODO builder}
+\caption[Building OpenSSL from source inside build.img with DebVM]{TODO builder}
 \end{listing}
 
 \subsection{Networking}
@@ -30,21 +30,21 @@ qemu+debvm
 
 \begin{listing}[ht]
 \inputminted{bash}{snippets/br0.bash}
-\caption{TODO bridge}
+\caption[Connecting QEMU virtual machines using a network bridge]{TODO br0}
 \end{listing}
 
 \blindtext
 
 \begin{listing}[ht]
 \inputminted{ini}{snippets/br0.ini}
-\caption{TODO bridge in}
+\caption[Static bridge network configuration using systemd]{TODO /etc/systemd/network/00-br0.network contents}
 \end{listing}
 
 \blindtext
 
 \begin{listing}[ht]
 \inputminted{bash}{snippets/root.bash}
-\caption{TODO root ca}
+\caption[Generating a new self-signed root CA X.509 certificate using OpenSSL]{TODO root ca}
 \end{listing}
 
 \blindtext
@@ -64,21 +64,21 @@ qemu+debvm
 
 \begin{listing}[ht]
 \inputminted{bash}{snippets/dns.bash}
-\caption{TODO dns}
+\caption[Signing a new X.509 certificate for ns.example.com using OpenSSL]{TODO dns}
 \end{listing}
 
 \blindtext
 
 \begin{listing}[ht]
 \inputminted{bash}{snippets/bind}
-\caption{TODO dns}
+\caption[DNS over HTTPS configuration using BIND 9]{TODO /etc/bind/named.conf contents}
 \end{listing}
 
 \blindtext
 
 \begin{listing}[ht]
 \inputminted{zone}{snippets/example.zone}
-\caption{TODO dns}
+\caption[Zone file for example.com zone with distributed ECH]{}
 \end{listing}
 
 \blindtext
@@ -103,21 +103,19 @@ qemu+debvm
 
 \begin{listing}[ht]
 \inputminted{bash}{snippets/host_wg.bash}
-\caption{TODO host wg}
+\caption[Generating a new WireGuard key pair for tcd.example.com]{TODO host wg}
 \end{listing}
 
 \blindtext
 
 \begin{listing}[ht]
 \inputminted{ini}{snippets/host_wg.ini}
-\caption{TODO host wg}
+\caption[Configuring a WireGuard network interface using systemd]{TODO host wg}
 \end{listing}
-
-\blindtext
 
 \begin{listing}[ht]
 \inputminted{ini}{snippets/host_wg0.ini}
-\caption{TODO host wg0}
+\caption[Static WireGuard network configuration using systemd]{TODO host wg0}
 \end{listing}
 
 \blindtext
@@ -128,21 +126,21 @@ qemu+debvm
 
 \begin{listing}[ht]
 \inputminted{bash}{snippets/host_tls.bash}
-\caption{TODO host+site tls}
+\caption[Generating a new ECH key pair for tcd.example.com using OpenSSL]{TODO host+site tls}
 \end{listing}
 
 \blindtext
 
 \begin{listing}[ht]
 \inputminted{nginx}{snippets/nginx}
-\caption{TODO nginx}
+\caption[Distributed ECH NGINX configuration for tcd.example.com]{TODO nginx}
 \end{listing}
 
 \blindtext
 
 \begin{listing}[ht]
 \inputminted{bash}{snippets/padding.bash}
-\caption{TODO padding}
+\caption[Rudimentary script to shroud legitimate WireGuard communication]{}
 \end{listing}
 
 \blindtext
@@ -168,20 +166,26 @@ qemu+debvm
 
 \begin{listing}[ht]
 \inputminted{nginx}{snippets/curl.bash}
-\caption{TODO curl}
+\caption[Command to use ECH-enabled curl on QEMU virtual machines]{TODO curl}
 \end{listing}
 
 \blindtext
+
+<screenshot>
 
 
 \subsection{Mozilla Firefox}
 
 \blindtext
 
+<screenshot>
+
 
 \subsection{Google Chrome}
 
 \blindtext
+
+<screenshot>
 
 
 
