@@ -5,7 +5,6 @@
 \usepackage[english]{babel}
 \usepackage[a4paper,top=2.54cm,bottom=2.54cm,left=2.54cm,right=2.54cm,headheight=16pt]{geometry}
 \usepackage{amsmath}
-\usepackage[autostyle=true]{csquotes}
 \usepackage[pdftex]{graphicx}
 \usepackage[colorlinks=true, allcolors=black]{hyperref}
 \usepackage{hyperxmp}
@@ -20,6 +19,7 @@
 \usepackage[section,newfloat]{minted}
 \usepackage{chngcntr}
 \usepackage[backend=biber, style=numeric-comp, sorting=none]{biblatex}
+\usepackage[autostyle=true]{csquotes}
 \usepackage{xurl}
 \usepackage{blindtext}
 
@@ -41,7 +41,6 @@
 	pdfauthor=Ted Johnson,
 	pdfsubject=Master in Computer Science (MCS),
 	pdfinfo={pdfsupervisor=Dr Stephen Farrell},
-	colorlinks=true,
 	linkcolor=black,
 	citecolor=blue,
 	filecolor=blue,
@@ -81,6 +80,7 @@
 \input{results.tex}
 \input{conclusion.tex}
 \printbibliography
+\addcontentsline{toc}{chapter}{Bibliography}
 
 \appendix
 \renewcommand{\thechapter}{A\arabic{chapter}}

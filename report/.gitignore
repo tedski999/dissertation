@@ -1,3 +1,4 @@
-build
+build/*
+!build/report.pdf
 venv
 _minted-report

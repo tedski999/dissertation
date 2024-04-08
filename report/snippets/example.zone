@@ -1,3 +1,4 @@
+$TTL 3600
 @ IN SOA dns root.dns 2024040100 3600 600 86400 600
 @ IN NS dns
 
