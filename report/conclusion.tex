@@ -1,14 +1,8 @@
 \chapter{Conclusion}\label{Conclusion}
 
-<this research has been a first effort to create a distributed ech deployment model>
-<we have seen background>
-<we have seen design>
-<we have seen implementation>
-<we have seen results>
+This research has been a first effort on defining a distributed deployment model for ECH. We have covered an overview of the background technology and concepts needed to appreciate the scope of the work. A study of the design of the deployment model with respect to the challenges surmounted was presented, which was followed by a dive into how the design can be implemented within a virtual testing environment. Lastly, an analysis of the results produced by the testing environment is provided, in which the quality of the design and implementation is evaluated and discussed.
 
-<in this final chapter, present key learnings>
-<then outline future work>
-<finish with a reflection of the project as a whole>
+In this final chapter, a summary of what was learnt from this project is included, as well as where this research could benefit from future work. I complete with a short reflection on the project as a whole.
 
 
 
@@ -20,11 +14,7 @@
 
 \section{Learnings}
 
-<ECH Split Mode topology permits distributed deployment>
-<https rr enable static load distribution>
-<A dynamic DNS service allows for fair load distribution>
-<minimal performance impact when compared to normal>
-<security is ok and techniques exist to defend against correlation attacks>
+This paper confirms that ECH using Split Mode topology allows for a distributed deployment amongst co-operating TLS servers. We saw that ECH-service load can be distributed evenly across servers using a static DNS configuration with a shared ECHConfig or balanced fairly when using a dynamic DNS service with separate ECHConfigs. There was minimal performance impact observed when compared to a centralised ECH deployment model, but higher latencies and bandwidth should be expected when using stricter traffic pacing and mixing parameters. While normalising of co-operating server traffic would ensure perfect masking of client activity, it is generally impractical to achieve this in civilian settings. However, there is evidence that traffic pacing and mixing exhibits sufficient anonymity properties but may be susceptible to statistical pattern detection using a well-trained machine learning model.
 
 
 
@@ -36,10 +26,11 @@
 
 \section{Future Work}
 
-<shared dns publication strategy (with ech key rotation)>
-<dynamic traffic flow analysis for load balancing (instead of just distribution)>
-<more in-depth study on disrupting traffic correlation attacks>
-<test deployment on actual hardware with realistic traffic>
+The research completed on the security properties of pacing and mixing co-operating server traffic to disrupt correlation attacks is not considered conclusive and requires a follow-up study. It is likely information theory could be employed here to help identify an optimal obfuscation method that minimises traffic impedance and bandwidth usage for a given set of channel throughputs.
+
+Additionally, further work is necessary to determine a shared DNS publication strategy which permits each server to perform regular ECH key rotation. The current design lacks any mechanism for co-operating servers to be able to publish a new set of resource records. In a similar vein, it would be beneficial for the dynamic DNS service to be notified of traffic flow experienced by each server for fairer load balancing. It seems likely both of these tasks would be suitable to be addressed in the same body of work.
+
+In any case, future development of this deployment model should be subjected to more realistic testing environments. This would be expected to include traffic flows and network topologies representative of real-world scenarios. This project has only demonstrated deployment using a single suite of software, namely NGINX and BIND within a QEMU virtual environment, so it may also be reasonable to trial its operation across different configurations of software and hardware.
 
 
 
@@ -50,9 +41,8 @@
 
 \section{Reflection}
 
-<what i think went well>
-<reliable, reproducable and deterministic virtual environment test bed>
-<functioning distributed ech prototype>
-<if i was to do this again, what would i change>
-<dedicate more time to theoretical instead of practical (e.g. got firefox working but unsure if actually compatible with spec>
-<however, the work completed is still applicable to future effort>
+I am grateful to have been granted considerable freedom within the scope of the project to investigate a number of relevant fields and technologies. I had not previously had the opportunity to work with QEMU or DebVM, so I am very pleased with the reproducible virtual build and testing environments I was able to orchestrate.
+
+However, I must also acknowledge that in covering this additional material within the limited time available, I feel I was only able to explore some areas superficially. Had I more time, I would have liked to continue my research into traffic analysis, correlation attacks and practical countermeasures.
+
+Overall, I found this project to be enjoyable to work on and served as a compelling dissertation topic.

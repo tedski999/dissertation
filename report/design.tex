@@ -24,17 +24,17 @@
 <parallel to the operation of ech split mode>
 <loose network must publish appropriate resource records such that clients choose to query any of them for any of their domains>
 <all providers listens on their public facing network interface for with ClientHelloOuter>
-<providers also listens on a virtual private network interface they are all a part of for actual connections>
+<providers also listen for actual connections>
 <clients resolve requested domain using DoH and then use round robin or other selection process to uniformly choose one of the providers at random with the correct echconfig>
 <client begins establishment to the requested via the selected provider using the providers echconfig>
 <as in ech split mode, the provider decrypts the ClientHelloInner to retrieve the actual domain requested>
-<the provider maps the domain to the true origin server and proxies the clients connection over a backend communication network to the origin server>
-<the origin server listening on the vpn interface completes the tls handshake with the client through the provider>
+<the provider maps the domain to the true origin server and proxies the clients connection over communication network to the origin server>
+<the origin server completes the tls handshake with the client through the provider>
 <this connection is end-to-end encrypted, so the provider does not mitm>
 
 <the design challenges can be split into two topics, mechanism for distribution and traffic obfuscation>
 <the distribution mechanism deals with a couple designs for the a dns publication schema so compatible clients follow the above process, and the networking required for tls servers to communicate with each other>
-<this considers load distribution, echconfig and stream proxying over a virtual private network>
+% <this considers load distribution, echconfig and stream proxying over a virtual private network>
 
 
 
@@ -53,7 +53,8 @@
 <one approach: shared echconfig with round robin A resource records>
 <load is evenly distributed across servers because client uses round robin on selected A rrs>
 <but requires shared secrets between all servers as there is no way to specify which ech key is associated with which host>
-<another approach: using alternative endpoints to associate ech keys with individual servers>
+
+<a better approach: using alternative endpoints to associate ech keys with individual servers>
 <load is evenly distributed across servers due to matching priority>
 <unfortunately more fine-grained load distribution is not possible without srv resource records adoption>
 <we can replicate this using a dynamic dns service, where records are regularly substituted such that load is distributed across servers in a fair manner>
@@ -61,10 +62,9 @@
 \subsection{TLS Server Co-operation}
 
 <tls servers are physically separate from each other and must communicate over the same network as the client when forwarding the client connection>
-<to do this, a virtual private network is established between participating servers>
 <servers still listen for normal tls connections on 443 port of the public interface as well as ech-enabled connection>
 <ech split mode connections have their ClientHelloInner decrypted and private domain mapped to the actual origin>
-<clients connection is forwarded over a virtual private network to the origin server>
+<clients connection is forwarded to the origin server>
 <the origin server listening on the vpn interface completes the tls handshake with the client through the provider>
 
 
@@ -75,21 +75,23 @@
 
 \section{Traffic Obfuscation}
 
-<ech is susceptible>\cite{trevisan2023attacking}
+<ech is susceptible, classifiers>\cite{trevisan2023attacking}
 <correlation attacks in low-latency systems like web browsing and video streaming compared to high-latency like email>\cite{levine2004timing}
 <rx/tx timing> <packet lengths> <traffic patterns> \cite{defabbia2011analyzing}
 
 \begin{figure}[ht]
 \centerline{\includegraphics[width=150mm]{images/correlation-attack.png}}
-\caption[Diagram of various traffic metrics useful in correlation attacks]{<TODO>}
+\caption[Diagram of how a correlation attack can be used]{<TODO>}
 \label{correlation_figure}
 \end{figure}
 
 <traffic obfuscation techniques lead "to disrupt the patterns">
+<encrypt traffic between participating servers on top of the public network>
 
 \subsection{Normalisation}
 
 <shannon and perfect secrecy: removal of all identifying features>
+<chatter>
 <injection of dummy traffic to fill bandwidth gaps>
 <impracticality in civilian environments due to required bandwidth>
 
@@ -120,6 +122,6 @@
 <we use dns https rrs to distributed load across multiple ech providers>
 <separate echconfigs can be used be each server as the ech key is associated with the server>
 <an alternative strategy exists that is more robust but requires shared echconfig>
-<a virtual private network between co-operating servers is used to allow peer communication>
 <ech split mode is vulnerable to correlation attacks>
+<a virtual private network between co-operating servers is used to allow peer communication>
 <but techniques exist to defend against attacks>

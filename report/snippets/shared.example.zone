@@ -1,0 +1,21 @@
+$ORIGIN example.com.
+$TTL 3600
+
+@ IN SOA dns root.dns 2024040100 3600 600 86400 600
+@ IN NS dns
+
+dcu IN A 172.0.0.2
+dcu IN A 172.0.0.5
+dcu IN A 172.0.0.8
+
+tcd IN A 172.0.0.2
+tcd IN A 172.0.0.5
+tcd IN A 172.0.0.8
+
+ucd IN A 172.0.0.2
+ucd IN A 172.0.0.5
+ucd IN A 172.0.0.8
+
+dcu IN HTTPS 1 . ech=<Shared ECHConfig>
+tcd IN HTTPS 1 . ech=<Shared ECHConfig>
+ucd IN HTTPS 1 . ech=<Shared ECHConfig>

@@ -1,0 +1,89 @@
+root@tls-client:~# curl --verbose --cacert /keys/root.crt --ech hard --doh-url https://dns.example.com/dns-query https://tcd.example.com
+* Some HTTPS RR to process
+* Host tcd.example.com:443 was resolved.
+* IPv6: (none)
+* IPv4: 172.0.0.2
+*   Trying 172.0.0.2:443...
+* Connected to tcd.example.com (172.0.0.2) port 443
+* ECH: ECHConfig from DoH HTTPS RR
+* ECH: imported ECHConfigList of length 68
+* ALPN: curl offers h2,http/1.1
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+*  CAfile: /keys/root.crt
+*  CApath: /etc/ssl/certs
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+* TLSv1.3 (IN), TLS handshake, CERT verify (15):
+* TLSv1.3 (IN), TLS handshake, Finished (20):
+* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
+* TLSv1.3 (OUT), TLS handshake, Finished (20):
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / x25519 / id-ecPublicKey
+* ECH: result: status is succeeded, inner is tcd.example.com, outer is dcu.example.com
+* ALPN: server accepted h2
+* Server certificate:
+*  subject: CN=tcd.example.com
+*  start date: Apr 10 18:05:25 2024 GMT
+*  expire date: Apr  8 18:05:25 2034 GMT
+*  subjectAltName: host "tcd.example.com" matched cert's "tcd.example.com"
+*  issuer: CN=root.example.com
+*  SSL certificate verify ok.
+*   Certificate level 0: Public key type EC/secp384r1 (384/192 Bits/secBits), signed using ecdsa-with-SHA256
+*   Certificate level 1: Public key type EC/secp384r1 (384/192 Bits/secBits), signed using ecdsa-with-SHA256
+* using HTTP/2
+* [HTTP/2] [1] OPENED stream for https://tcd.example.com/
+* [HTTP/2] [1] [:method: GET]
+* [HTTP/2] [1] [:scheme: https]
+* [HTTP/2] [1] [:authority: tcd.example.com]
+* [HTTP/2] [1] [:path: /]
+* [HTTP/2] [1] [user-agent: curl/8.7.2-DEV]
+* [HTTP/2] [1] [accept: */*]
+> GET / HTTP/2
+> Host: tcd.example.com
+> User-Agent: curl/8.7.2-DEV
+> Accept: */*
+>
+* Request completely sent off
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+* old SSL session ID is stale, removing
+< HTTP/2 200
+< server: nginx/1.25.4
+< date: Wed, 10 Apr 2024 19:12:44 GMT
+< content-type: text/html
+<
+<!doctype html>
+<html lang=en>
+	<head>
+		<meta charset=utf-8>
+		<title>tcd.example.com</title>
+	</head>
+	<body>
+		<img src="/image.png" width="300" height="300">
+		<p>
+			Welcome to <b>tcd.example.com</b><br/>
+			Got here via <i>172.0.1.2</i>
+		</p>
+		<ul>
+			<li>SNI: tcd.example.com</li>
+			<li>HTTP host: tcd.example.com</li>
+			<li>ALPN protocol: h2</li>
+		</ul>
+		<form action="/pkglist">
+			<input type="submit" value="Download pkglist" />
+		</form>
+		<p>
+			Sites on dcu (172.0.0.2):<br/>
+			<a href="https://dcu.example.com">dcu.example.com</a>
+		</p>
+		<p>
+			Sites on tcd (172.0.0.5):<br/>
+			<a href="https://tcd.example.com">tcd.example.com</a> *
+		</p>
+		<p>
+			Sites on ucd (172.0.0.8):<br/>
+			<a href="https://ucd.example.com">ucd.example.com</a>
+		</p>
+	</body>
+</html>
+* Connection #0 to host tcd.example.com left intact
