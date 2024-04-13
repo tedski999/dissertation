@@ -44,13 +44,15 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 	mount /dev/vdb /mnt || exit 1
 
 	# Build OpenSSL patched with ECH support
-	git clone -b ECH-draft-13c https://github.com/sftcd/openssl.git /mnt/src/openssl && cd /mnt/src/openssl || exit 1
+	git clone -b ECH-draft-13c https://github.com/sftcd/openssl.git /mnt/src/openssl \
+		&& cd /mnt/src/openssl || exit 1
 	./config --prefix=/mnt/openssl --openssldir=/mnt/openssl || exit 1
 	make -j8 || exit 1
 	make -j8 install || exit 1
 
 	# Build curl patched with ECH support
-	git clone -b ECH-experimental https://github.com/sftcd/curl.git /mnt/src/curl && cd /mnt/src/curl || exit 1
+	git clone -b ECH-experimental https://github.com/sftcd/curl.git /mnt/src/curl \
+		&& cd /mnt/src/curl || exit 1
 	autoreconf -fi || exit 1
 	CPPFLAGS=-I/mnt/openssl/include LDFLAGS=-L/mnt/openssl/lib64 ./configure \\
 		--prefix=/mnt/curl --with-openssl --enable-ech --enable-httpsrr || exit 1
@@ -58,8 +60,10 @@ sudo ip link show br0 1>/dev/null 2>&1 || {
 	make -j8 install || exit 1
 
 	# Build NGINX patched with ECH support
-	git clone -b ECH-experimental https://github.com/sftcd/nginx.git /mnt/src/nginx && cd /mnt/src/nginx || exit 1
-	./auto/configure --prefix=/mnt/nginx --with-cc-opt=-I/mnt/openssl/include --with-ld-opt=-L/mnt/openssl/lib64 \\
+	git clone -b ECH-experimental https://github.com/sftcd/nginx.git /mnt/src/nginx \
+		&& cd /mnt/src/nginx || exit 1
+	./auto/configure --prefix=/mnt/nginx \\
+		--with-cc-opt=-I/mnt/openssl/include --with-ld-opt=-L/mnt/openssl/lib64 \\
 		--with-stream --with-stream_ssl_module --with-stream_ssl_preread_module \\
 		--with-http_ssl_module --with-http_v2_module || exit 1
 	LD_LIBRARY_PATH=/mnt/openssl/lib64 make -j8 || exit 1
@@ -168,26 +172,55 @@ options {
 >/etc/bind/named.conf.local echo '
 zone \"$domain\" {
 	type master;
+	update-policy local;
 	file \"/var/lib/bind/db.$domain\";
 };' || exit 1
 
-# Configure BIND9 with RRs for dns.example.com
+# Configure BIND9 with static RRs for dns.example.com
 >/var/lib/bind/db.$domain echo '
+\$ORIGIN ${domain}.
 \$TTL 60
-@ IN SOA $dns_host root.$dns_host 2007010401 3600 600 86400 600
+@ IN SOA $dns_host root.$dns_host 2024040100 3600 600 86400 600
 @ IN NS $dns_host
-$dns_host IN A $dns_ip"
-for server_cfg in $server_cfgs; do IFS=, read host _ ip _ sites <<< $server_cfg
-	cmds="$cmds"$'\n'"$host.ech IN A $ip"
+$dns_host IN A $dns_ip' || exit 1
+
+# Dynamic DNS service
+>/ddns.sh echo '#!/bin/bash
+servers=\""
+for server_cfg in $server_cfgs; do IFS=, read host _ ip _ _ <<< $server_cfg
+	cmds="$cmds $ip,\$(tail -2 /keys/$host/key.ech | head -1)"
+done
+cmds="$cmds\"
+while true; do"
+for server_cfg in $server_cfgs; do IFS=, read _ _ _ _ sites <<< $server_cfg
 	for site in ${sites//,/ }; do
-		for p_server_cfg in $server_cfgs; do IFS=, read p_host _ <<< $p_server_cfg
-			[ "$host" != "$p_host" ] && {
-				cmds="$cmds"$'\n'"$site IN HTTPS 1 $p_host.ech ech='\$(tail -2 /keys/$p_host/key.ech | head -1)'"
-			}
-		done
+		cmds="$cmds
+		server=\$(shuf -n 1 -e \$servers)
+		input=\"\$input
+		update delete $site.$domain
+		update add $site.$domain 60 A \${server%%,*}
+		update add $site.$domain 60 HTTPS 1 . ech=\${server#*,}
+		\""
 	done
 done
-cmds="$cmds' || exit 1"
+cmds="$cmds
+	echo \"\$input
+	send\" | nsupdate -l
+	sleep 1
+done' || exit 1
+>/ddns.service echo '
+[Unit]
+After=named.service
+[Service]
+ExecStart=/ddns.sh
+Restart=always
+[Install]
+WantedBy=multi-user.target' || exit 1
+chmod +x /ddns.sh || exit 1
+
+# Install service
+cp /ddns.service /etc/systemd/system || exit 1
+systemctl daemon-reload && systemctl enable ddns || exit 1"
 
 declare "${dns_host}_cmds=$cmds"
 
@@ -195,7 +228,7 @@ declare "${dns_host}_cmds=$cmds"
 for server_cfg in $server_cfgs; do IFS=, read host _ ip wg sites <<< $server_cfg
 	cmds="
 	# Install dependencies
-	apt-get --yes install wireguard tcpdump || exit 1
+	apt-get --yes install wireguard socat || exit 1
 
 	# Configure WireGuard
 	>/etc/systemd/network/00-wg0.netdev echo '
@@ -236,9 +269,9 @@ for server_cfg in $server_cfgs; do IFS=, read host _ ip wg sites <<< $server_cfg
 		ssl_echkeydir /keys/$host;
 		server { listen $ip:443; proxy_pass \$backend; }
 		map \$ssl_preread_server_name \$backend {"
-	for p_server_cfg in $server_cfgs; do IFS=, read _ _ _ p_wg p_sites <<< $p_server_cfg
+	for p_server_cfg in $server_cfgs; do IFS=, read p_host _ _ _ p_sites <<< $p_server_cfg
 		for p_site in ${p_sites//,/ }; do
-			cmds="$cmds $p_site.$domain $p_wg:443;"
+			cmds="$cmds $p_site.$domain unix:/tmp/socat_$p_host.sock;"
 		done
 	done
 	cmds="$cmds
@@ -306,17 +339,24 @@ for server_cfg in $server_cfgs; do IFS=, read host _ ip wg sites <<< $server_cfg
 	cmds="$cmds
 	# WireGuard traffic padding service
 	>/site/padding.sh echo '#!/bin/bash
-	tc qdisc replace dev enp0s6 root netem slot 100ms 200ms
-	tcpdump -i wg0 -nnqt ip and src $wg | while read _ _ _ dst _ len; do"
-	for p_server_cfg in $server_cfgs; do IFS=, read _ _ _ p_wg _ <<< $p_server_cfg
+	tc qdisc replace dev enp0s6 root netem slot 50ms 100ms"
+	for p_server_cfg in $server_cfgs; do IFS=, read p_host _ _ p_wg _ <<< $p_server_cfg
 		cmds="$cmds
-		[ \"$p_wg\" != \"\${dst%.*}\" ] && dd status=none if=/dev/urandom bs=\$len count=1 >/dev/udp/$p_wg/12345 &"
+		socat -x UNIX-LISTEN:/tmp/socat_$p_host.sock,fork,umask=0 TCP:$p_wg:443 2>&1 | grep --line-buffered ^\\> | while read _ _ _ len _ _; do"
+		for pp_server_cfg in $server_cfgs; do IFS=, read _ _ _ pp_wg _ <<< $pp_server_cfg
+			[ "$p_wg" != "$pp_wg" ] && {
+				cmds="$cmds
+				dd if=/dev/urandom bs=\${len#*=} count=1 >/dev/udp/$pp_wg/12345 &"
+			}
+		done
+		cmds="$cmds
+		done &"
 	done
 	cmds="$cmds
-	done' || exit 1
+	wait' || exit 1
 	>/site/padding.service echo '
 	[Unit]
-	After=network-online.target
+	Before=nginx.service
 	[Service]
 	ExecStart=/site/padding.sh
 	Restart=always
@@ -401,132 +441,3 @@ for cfg in "$dns_host,$dns_mac" $server_cfgs; do IFS=, read host mac _ <<< $cfg
 done
 wait
 killall debvm-run qemu-system-x86_64
-
-
-# curl --verbose --cacert /keys/root.crt --ech hard --doh-url https://dns.example.com/dns-query https://a.tcd.example.com
-
-# RR PUBLICATION
-#
-# 1. Every CFS shares an ECHconfig -> Indistinguishable requests (1 anonymity set), simpler DNS records (use many A instead of only one at a time or HTTPS AltEnds)
-# 2. Every CFS has its own ECHconfig -> Easier to keep secure (no sharing secrets), public_name makes more sense
-#
-#
-# LOAD BALANCING
-#
-# Bind9 built-in load distribution is not very flexible, only can use
-# round robin As (and maybe round robin HTTPS AltEndpoins in the future).
-#
-# Once HTTPS AltEnds are properly supported, I think DNS could look like:
-#
-#   foo IN A <foo ip>
-#   foo IN HTTPS 1 .   ech=<foo ech>
-#   foo IN HTTPS 1 bar ech=<bar ech>
-#   foo IN HTTPS 1 baz ech=<baz ech>
-#
-#   bar IN A <bar ip>
-#   bar IN HTTPS 1 foo ech=<foo ech>
-#   bar IN HTTPS 1 .   ech=<bar ech>
-#   bar IN HTTPS 1 baz ech=<baz ech>
-#
-#   baz IN A <baz ip>
-#   baz IN HTTPS 1 foo ech=<foo ech>
-#   baz IN HTTPS 1 bar ech=<bar ech>
-#   baz IN HTTPS 1 .   ech=<baz ech>
-#
-# But this would very likely put more load on foo than bar or baz as
-# SVCB-optional clients can just use the A record. So what if all the
-# names were regularly exchanged? e.g. foo->baz, bar->foo, baz->bar:
-#
-#   foo IN A <baz ip>
-#   foo IN HTTPS 1 .   ech=<baz ech>
-#   foo IN HTTPS 1 bar ech=<foo ech>
-#   foo IN HTTPS 1 baz ech=<bar ech>
-#
-#   bar IN A <foo ip>
-#   bar IN HTTPS 1 foo ech=<baz ech>
-#   bar IN HTTPS 1 .   ech=<foo ech>
-#   bar IN HTTPS 1 baz ech=<bar ech>
-#
-#   baz IN A <bar ip>
-#   baz IN HTTPS 1 foo ech=<baz ech>
-#   baz IN HTTPS 1 bar ech=<foo ech>
-#   baz IN HTTPS 1 .   ech=<bar ech>
-#
-# By default, HTTPSs would also be served round robin. We could do fair load
-# balancing just based on which host is swapped with which and for how long,
-# but in a perfect SVCB world, load is equally split like A round robin is.
-#
-# Above can be implemented now if only one shared ECHconfig is used.
-# Configurable:
-#  - If built-in round robin technique is still deployed.
-#  - If split ECHconfigs are used (would break curl and most other clients).
-#
-#
-# NOISE GENERATION
-#
-# Assuming we know how much traffic is expected to go to a host right now,
-#
-#
-#
-# Critical questions:
-# - Do AltEnds still get requests with the original SNI and Host values?
-# - Does having separate ECHconfigs per host reduce security? Is it worth it? What about public_name?
-# - Can HTTPS priorities be used to fairly balance load?
-#
-# Could implement AltEnds functionality manually on top of OpenSSL s_client.
-#
-
-
-# Shared key with basic round robin load distribution:
-#
-# dcu IN A <dcu ip>
-# dcu IN A <tcd ip>
-# dcu IN A <ucd ip>
-# dcu IN HTTPS 1 . ech=<shared ech>
-#
-# tcd IN A <dcu ip>
-# tcd IN A <tcd ip>
-# tcd IN A <ucd ip>
-# tcd IN HTTPS 1 . ech=<shared ech>
-#
-# tcd IN A <dcu ip>
-# tcd IN A <tcd ip>
-# tcd IN A <ucd ip>
-# tcd IN HTTPS 1 . ech=<shared ech>
-#
-#
-# Split key requiring HTTPS RR for round robin load distribution:
-#
-# dcu IN A <dcu ip>
-# dcu IN HTTPS 1 .   ech=<dcu ech>
-# dcu IN HTTPS 1 tcd ech=<tcd ech>
-# dcu IN HTTPS 1 ucd ech=<ucd ech>
-#
-# tcd IN A <tcd ip>
-# tcd IN HTTPS 1 dcu ech=<dcu ech>
-# tcd IN HTTPS 1 .   ech=<tcd ech>
-# tcd IN HTTPS 1 ucd ech=<ucd ech>
-#
-# ucd IN A <ucd ip>
-# ucd IN HTTPS 1 dcu ech=<dcu ech>
-# ucd IN HTTPS 1 tcd ech=<tcd ech>
-# ucd IN HTTPS 1 .   ech=<ucd ech>
-#
-#
-# Smart DNS service to also distribute SVCB-optional clients
-#
-# dcu IN A <dcu ip|tcd ip|ucd ip>
-# dcu IN HTTPS 1 .   ech=<dcu ech|tcd ech|ucd ech>
-# dcu IN HTTPS 1 tcd ech=<tcd ech|ucd ech|dcu ech>
-# dcu IN HTTPS 1 ucd ech=<ucd ech|dcu ech|tcd ech>
-#
-# tcd IN A <tcd ip|ucd ip|dcu ip>
-# tcd IN HTTPS 1 dcu ech=<dcu ech|tcd ech|ucd ech>
-# tcd IN HTTPS 1 .   ech=<tcd ech|ucd ech|dcu ech>
-# tcd IN HTTPS 1 ucd ech=<ucd ech|dcu ech|tcd ech>
-#
-# ucd IN A <ucd ip|dcu ip|tcd ip>
-# ucd IN HTTPS 1 tcd ech=<dcu ech|tcd ech|ucd ech>
-# ucd IN HTTPS 1 ucd ech=<tcd ech|ucd ech|dcu ech>
-# ucd IN HTTPS 1 .   ech=<ucd ech|dcu ech|tcd ech>
-#
