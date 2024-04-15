@@ -1,13 +1,13 @@
-\chapter{Project Instructions}
+\chapter{Project Files}\label{project-files}
 
-For sake of experimental reproducibility, a ZIP archive of the project code, three scenarios and packet capture files have been provided alongside this report. Additionally, a copy can be found online: \url{https://github.com/tedski999/distributed-ech}.
+For the sake of experimental reproducibility, a ZIP archive of the project code, three scenarios and packet capture files have been provided alongside this report. Additionally, a copy can be found online: \url{https://github.com/tedski999/distributed-ech}.
 
-The source code consists of a single Bash script, \mintinline[linenos=false,fontsize=]{bash}{run.sh}, which contains all the necessary logic to setup and run any virtual testing environment described using two scenario configuration files, \mintinline[linenos=false,fontsize=]{bash}{network.csv} and \mintinline[linenos=false,fontsize=]{bash}{server.csv}. The script is dependant on DebVM, and by extension QEMU and mmdebstrap. A path \mintinline[linenos=false,fontsize=]{bash}{sandbox} must also be specified as the directory to store QEMU images and other ephemeral data.
+The source code consists of a single Bash script, \mintinline[linenos=false,fontsize=]{bash}{run.sh}, which contains all the necessary logic to setup and run any virtual testing environment described using two scenario configuration files, \mintinline[linenos=false,fontsize=]{bash}{network.csv} and \mintinline[linenos=false,fontsize=]{bash}{server.csv}. The script is dependent on DebVM, and by extension QEMU and mmdebstrap. A path \mintinline[linenos=false,fontsize=]{bash}{sandbox} must also be specified as the directory to store QEMU images and other ephemeral data.
 
 Given two scenario configuration files, the environment can be generated and started by executing \mintinline[linenos=false,fontsize=]{bash}{./run.sh sandbox network.csv servers.csv}. Initial setup times can be lengthy, as OpenSSL, curl and NGINX must be built before all QEMU virtual machine images are configured and booted. These builds and configurations are preserved, so later environment boot up times are far quicker.
 
 Once running, a virtual machine can be accessed using the corresponding SSH command printed to the terminal: \mintinline[linenos=false,fontsize=]{bash}{ssh -i 'sandbox/ssh.key' -p 2222 root@127.0.0.1}. See Chapter~\ref{Implementation} for more information on how to use this environment.
 
-\chapter{Verbose curl Output}
+\chapter{Verbose curl Output}\label{verbose-curl-output}
 
 \inputminted[tabsize=2,breaklines,breakanywhere]{text}{snippets/curl}

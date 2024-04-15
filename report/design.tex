@@ -1,72 +1,49 @@
 \chapter{Design}\label{Design}
 
-<this disseration aims to serve as a guide for security researchers and service operator on the viablity of distributed ech>
-<during the course of this project, a system design was formulated and iteratively refined>
-<the main parts of the design considered are its deployment schema and protecting traffic>
-
-<in this chapter, we will study the determined solution as well as the challenges that motivated its design>
-<this consists of a overview of purposed system followed by an examination of its individual components>
+This chapter defines the challenges associated with the research problem and presents a refined solution. We then delve deeper into the individual components to explore the reasoning and considerations that produced this design, and outline the benefits and limitations of alternative approaches. The chapter aims to showcase this idea independent of implementation, instead using generalised concepts that may be applied by the reader within their own practice.
 
 
 
 \section{Problem Overview}
 
-<ech split mode serves as a bases for distributed deployment, but makes no attempt to address the implications of servers being operated by separate organisations and located across a public network>
-<to do so, we must consider a number of challenges faced by this situation to enable co-operation and secure functioning>
-<this paper purposes a loose network of tls servers all acting as ech providers for each other which proxy connections to the true origin server, as depicted in Fig.~\ref{distributed_ech_figure}>
+As we saw in Chapter~\ref{Introduction}, a distributed deployment model for ECH exhibits some desirable qualities but also constitutes quite a complicated problem to solve. There are many factors at play, particularly around orchestrating TLS server co-operation, publishing ECHConfig values associated with specific servers, instructing TLS client behaviour and impeding traffic analysis attacks. Furthermore, these have to function within the confines of our imperfect world where we must accept headaches of technological inertia and legacy systems. This has only grown in prevalence on the Internet, with backbone technologies like IPv4, DNS and HTTP requiring countless workarounds or extensions to meet our modern demands without breaking backwards-compatibility.
+
+The overall form of the solution appears somewhat similar to how conventional ECH in Split Mode operates. In Section~\ref{split-mode-deployment}, it was highlighted how Split Mode provides a means to separate ECH-service providers from private domain origin servers, but makes no attempt to remain secure when deployed across a public network nor facilitate a multi-provider setup. The approach taken here differs primarily in that the DNS resource records for a private domain can point to any IP address in the co-operative network while all co-operating TLS servers are linked together over public channels. We can see such a scenario depicted in Fig.~\ref{distributed_ech_figure}, where when examining Split Mode previously we saw three origin servers accessible through a single provider, we can now envision a client capable of querying any of the three origin servers for a private domain and having their connection transparently reach through to the correct origin server.
 
 \begin{figure}[ht]
 \centerline{\includegraphics[width=160mm]{images/distributed-ech.png}}
-\caption[Example distributed ECH deployment]{<>}
+\caption[Example distributed ECH deployment]{An example distributed deployment of ECH using the proposed solution. Steps 1 and 2 are completed out-of-band while steps 3 and 4 result in a TLS connection being established between the client and appropriate origin server through another TLS server.}
 \label{distributed_ech_figure}
 \end{figure}
 
-<parallel to the operation of ech split mode>
-<loose network must publish appropriate resource records such that clients choose to query any of them for any of their domains>
-<all providers listens on their public facing network interface for with ClientHelloOuter>
-<providers also listen for actual connections>
-<clients resolve requested domain using DoH and then use round robin or other selection process to uniformly choose one of the providers at random with the correct echconfig>
-<client begins establishment to the requested via the selected provider using the providers echconfig>
-<as in ech split mode, the provider decrypts the ClientHelloInner to retrieve the actual domain requested>
-<the provider maps the domain to the true origin server and proxies the clients connection over communication network to the origin server>
-<the origin server completes the tls handshake with the client through the provider>
-<this connection is end-to-end encrypted, so the provider does not mitm>
+This diagram hides some technical details and considerations that should be kept in mind. This loose network of TLS servers somehow need to publish DNS resource records for all private domains that can point at any one of them while referencing the corresponding ECHConfig value. Additionally, one design criteria is for load to be allocated across the network in a reasonably fair manner, so it is expected that every server is continuously operating as an ECH-service provider for other servers. As such, it is not enough to regularly cycle through sets of DNS resource records pointing towards each server one at a time but we must instead find a method to have the same DNS query uniformly spread clients amongst participating servers. This is especially hard if we want all servers to have distinct private keys and thus different ECHConfig values, as now we need to somehow associate this value with an individual server rather than with the domain name, which is a historically difficult challenge in DNS.
 
-<the design challenges can be split into two topics, mechanism for distribution and traffic obfuscation>
-<the distribution mechanism deals with a couple designs for the a dns publication schema so compatible clients follow the above process, and the networking required for tls servers to communicate with each other>
-% <this considers load distribution, echconfig and stream proxying over a virtual private network>
+As both the client-server and server-server channels are over public networks, this reveals a perfect attack surface for any network observers to perform a correlation attack between server ingress and egress traffic. Even after an origin server completes the TLS handshake and establishes end-to-end encrypted communication with a client, an eavesdropper can deduce which origin server the client is interacting with by comparing ingress/egress times and packet counts.
+
+To address these challenges, the design has been split into two topics of interest: Identifying mechanisms needed for enabling distributed deployment and disrupting correlation attacks using traffic obfuscation techniques.
 
 
 
 
 
 
+\section{Distribution Mechanisms}
 
-\section{Distribution Mechanism}
-
-<distribution is based on two parts>
-<first, clients need to be able to select from several options provided by a dns query>
-<second, co-oerating tcp servers need to be able to forward connections to each other based on the decrypted ClientHelloInner>
+The previous section raised a number of criteria that must be fulfilled to allow for this distributed deployment model, which can be summarised into two points. Firstly, the solution requires a series of procedures that enables the use of DNS resource records to direct ECH-enabled clients evenly between all co-operating TLS servers with correct ECHConfig values when resolving private domain names using encrypted DNS. Then, these servers need to be able to forward client connections to each other over a public network without exposing the decrypted ClientHelloInner.
 
 \subsection{DNS Publication Schema}
 
-<one approach: shared echconfig with round robin A resource records>
-<load is evenly distributed across servers because client uses round robin on selected A rrs>
-<but requires shared secrets between all servers as there is no way to specify which ech key is associated with which host>
+We can take advantage of the commonly seen round-robin DNS technique to share load throughout the co-operative network. Round-robin DNS works by responding to DNS queries with multiple valid IP addresses in a random order from which the client selects one. This is typically used to provide simplistic uniform load distribution without the need for dedicated load balancing software or hardware. By installing the IP addresses of all co-operating TLS servers into all private domain name DNS resource records, clients who resolve any of these domains will be directed any one of the servers. This has the additional benefit of allowing clients to immediately retry a connection with the next IP if the connection fails, although some clients might not implement this. However, a major flaw with this approach is requiring all servers to share an ECH private key because there is no way to specify which ECHConfig value should be used by the client when it selects an IP address. As such, this mechanism can only work if there is exactly one ECHConfig value to choose from.
 
-<a better approach: using alternative endpoints to associate ech keys with individual servers>
-<load is evenly distributed across servers due to matching priority>
-<unfortunately more fine-grained load distribution is not possible without srv resource records adoption>
-<we can replicate this using a dynamic dns service, where records are regularly substituted such that load is distributed across servers in a fair manner>
+If we are not limited to static declaration of DNS resource records, a better method can be employed here using a dynamic DNS service. We use software to regularly substitute private domain name DNS resource records such that load is fairly balanced across servers. This allows us to specify specific IP address and ECHConfig value pairs for each domain name, alleviating the need for sharing private keys. Such software can also make intelligent decisions based on real-time information such as amount of DNS queries or even reported TLS server traffic flow, which could greatly improve the fairness offered by the load balancing system in cases of heterogeneous server capabilities. Unfortunately, using dynamic DNS for load balancing is prone to sporadic inconsistency due to DNS response caching. Not only can stale cache entries send traffic to wrong locations, this can suddenly result in more traffic appearing on one IP address if a busy recursive resolver chooses to cache a response for many stub resolvers to use. Lowering the Time-To-Live (TTL) of DNS resource records may help, at the cost of more frequent polling.
+
+It may also be worthwhile to investigate HTTPS resource records ``alternative endpoint'' functionality, which may be able to associate ECHConfig values with individual servers rather than domain names. However, this project was not able to get consistent results across different platforms with these.
 
 \subsection{TLS Server Co-operation}
 
-<tls servers are physically separate from each other and must communicate over the same network as the client when forwarding the client connection>
-<servers still listen for normal tls connections on 443 port of the public interface as well as ech-enabled connection>
-<ech split mode connections have their ClientHelloInner decrypted and private domain mapped to the actual origin>
-<clients connection is forwarded to the origin server>
-<the origin server listening on the vpn interface completes the tls handshake with the client through the provider>
+Due to servers operating as both an own origin server for their own domains and as an ECH-service provider for all other domains in the anonymity set, they need to accept both regular ClientHello messages and ClientHello messages containing the ECH extension with an encrypted ClientHelloInner. While a regular ClientHello message results in the usual TLS handshake, after decryption a ClientHelloInner can lead to either ECH in Shared Mode or Split Mode. In Shared Mode, the ClientHelloInner can now be processed as a regular ClientHello message, but Split Mode requires the server proxy the TLS connection the appropriate origin server.
 
+When forwarding this connection to the origin server, the ClientHelloInner is now sent as a regular ClientHello without any security, entirely defeating the purpose of ECH. To solve this issue, server-server communication have some form on encryption to maintain the confidentiality of the ClientHelloInner. As widely shared secrets should be avoided and we would like this co-operation network to remain adaptable to change, a KEM and KDF backed by public key cryptography should be considered to establish ephemeral shared secrets between servers for conducting symmetric encryption.
 
 
 
@@ -75,42 +52,24 @@
 
 \section{Traffic Obfuscation}
 
-<ech is susceptible, classifiers>\cite{trevisan2023attacking}
-<correlation attacks in low-latency systems like web browsing and video streaming compared to high-latency like email>\cite{levine2004timing}
-<rx/tx timing> <packet lengths> <traffic patterns> \cite{defabbia2011analyzing}
+In addition to protecting the ClientHelloInner from exposure, this design also seeks to prevent revelation of which origin server a client is communicating with, as such knowledge could significantly reduce or eliminate the anonymity set cloaking the target domain name. We have already seen in Section~\ref{traffic-correlation-attacks} that ECH is susceptible to traffic correlation attacks through machine learning classifier models and that there exists many metrics useful for traffic pattern recognition. Then in the following section, it was noted that low-latency network systems are especially vulnerable to timing analysis attacks. Together, these present a difficult challenge for ensuring the security of ECH when using distributed deployment.
 
 \begin{figure}[ht]
 \centerline{\includegraphics[width=150mm]{images/correlation-attack.png}}
-\caption[Diagram of how a correlation attack can be used]{<TODO>}
+\caption[Diagram of how a correlation attack can be used]{A network observer with view a of client-server and server-server channels has the opportunity to launch correlation attacks.}
 \label{correlation_figure}
 \end{figure}
 
-<traffic obfuscation techniques lead "to disrupt the patterns">
-<encrypt traffic between participating servers on top of the public network>
+In an attempt to mitigate these attacks, this design introduces obfuscation on top of encryption into all server-server channel traffic. These techniques are based on the goal of minimising features and interrupting patterns that occur in communication systems that can be used to find associations between channels. As seen in Fig.~\ref{correlation_figure}, if an eavesdropper can record both the ingress and egress traffic of a co-operating server, they may be able to track the movement of packets from one channel to another due to these conspicuous traits. Such a situation is not improbable, as in reality both channels are likely to pass through the same physical infrastructure or organisation at some point.
 
 \subsection{Normalisation}
 
-<shannon and perfect secrecy: removal of all identifying features>
-<chatter>
-<injection of dummy traffic to fill bandwidth gaps>
-<impracticality in civilian environments due to required bandwidth>
+Normalisation is the process of morphing arbitrary traffic network such that a given metric remains a fixed value over time. For example, instantaneous throughput could be considered an aspect of traffic that can be correlated with another the activity in another channel. Normalisation can apply traffic shaping rules and inject noise to ensure their is a constant amount of throughout at any one time. Normalisation for masking the absence of traffic can be somewhat impractical for use in civilian-settings as bandwidth can be both limited and variable, so it might not be an economic viable approach.
 
 \subsection{Pacing and Mixing}
 
-<while not perfect, many practical techniques exist to mask traffic with minimal impacts>
-<padding packets themselves to prevent packet length correlation>
-\cite{yu2012predicted}
-<to disrupt timing-based correlation attacks, delays and slotting (aka pacing) can be used>
-<to disrupt deep packet inspection, other packet-based correlation attacks (traffic patterns), traffic mixing can be used>
-\cite{fu2003analytical, fu2003effectiveness}
-<a simple technique is packet duplication, where a similar packet is sent to every peer>
+While not perfect, many practical techniques exist to mask traffic with minimal impact to overall network performance. For instance, the lengths of packets may be rounded to the next multiple of 32 or such that it blends in with surrounding activity~\cite{yu2012predicted}. To disrupt timing-based correlation attacks, delays and packet slotting can be used to pace the rate of traffic. Traffic mixing, where dummy traffic is introduced into the stream, has also proven to be effective when used in conjunction with variable inter-arrival times~\cite{fu2003analytical, fu2003effectiveness}.
 
-% TODO: likely a comparison table or graph from info theory
-% \begin{figure}[ht]
-% \centerline{\includegraphics[width=120mm]{images/tls-handshake.png}}
-% \caption[TODO technique comparision]{<TODO>}
-% \label{noise_figure}
-% \end{figure}
 
 
 
@@ -118,10 +77,4 @@
 
 \section{Summary}
 
-<it fulfills the desired design criteria>
-<we use dns https rrs to distributed load across multiple ech providers>
-<separate echconfigs can be used be each server as the ech key is associated with the server>
-<an alternative strategy exists that is more robust but requires shared echconfig>
-<ech split mode is vulnerable to correlation attacks>
-<a virtual private network between co-operating servers is used to allow peer communication>
-<but techniques exist to defend against attacks>
+Every co-operating TLS server operates both as ECH-service provider for all other members and as an origin server for any domains it serves. Round-robin static DNS and dynamic DNS can be used with the HTTPS resource record to fairly distribute ECH-enabled client traffic amongst these servers, but the round-robin technique requires all servers to shared a private key. Without intervention, passive observers would be able to read ClientHelloInner values from server-server channels and undermine anonymity sets through traffic correlation. To solve this, server-server communication is encrypted and further obfuscated using traffic pacing and dummy packet mixing.
