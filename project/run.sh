@@ -11,6 +11,9 @@ server_cfgs="$(<"$3")" || exit 1
 read -d "" domain dns_host dns_mac dns_ip <<< "$network_cfg"
 mkdir -p "$dir" || exit 1
 
+# List of additional hosts useful for interactive testing and evaluation purposes
+client_cfgs="tls-client,00:00:00:00:00:01,172.0.0.100"
+
 # Generate SSH keypair
 [ -f "$dir/ssh.key" ] && [ -f "$dir/ssh.key.pub" ] || {
 	msg "Generating ssh keypair for VMs..."
@@ -339,7 +342,7 @@ for server_cfg in $server_cfgs; do IFS=, read host _ ip wg sites <<< $server_cfg
 	cmds="$cmds
 	# WireGuard traffic padding service
 	>/site/padding.sh echo '#!/bin/bash
-	tc qdisc replace dev enp0s6 root netem slot 50ms 100ms"
+	tc qdisc replace dev enp0s6 root netem slot 10ms 20ms"
 	for p_server_cfg in $server_cfgs; do IFS=, read p_host _ _ p_wg _ <<< $p_server_cfg
 		cmds="$cmds
 		socat -x UNIX-LISTEN:/tmp/socat_$p_host.sock,fork,umask=0 TCP:$p_wg:443 2>&1 | grep --line-buffered ^\\> | while read _ _ _ len _ _; do"
@@ -373,7 +376,7 @@ done
 
 # Generate all VM images in parallel
 port=2222
-for cfg in "$dns_host,$dns_mac,$dns_ip" $server_cfgs; do IFS=, read host mac ip _ <<< $cfg
+for cfg in "$dns_host,$dns_mac,$dns_ip" $server_cfgs $client_cfgs; do IFS=, read host mac ip _ <<< $cfg
 	port="$((port+1))"
 	[ -f "$dir/$host.img" ] || {
 		msg "Generating $host.img:"
@@ -424,7 +427,7 @@ done
 wait
 
 port=2222
-for cfg in "$dns_host,$dns_mac" $server_cfgs; do IFS=, read host mac _ <<< $cfg
+for cfg in "$dns_host,$dns_mac" $server_cfgs $client_cfgs; do IFS=, read host mac _ <<< $cfg
 	sleep 1
 	port="$((port+1))"
 	{
@@ -439,5 +442,7 @@ for cfg in "$dns_host,$dns_mac" $server_cfgs; do IFS=, read host mac _ <<< $cfg
 		msg "Host $host has shutdown"
 	} &
 done
+
+
 wait
 killall debvm-run qemu-system-x86_64

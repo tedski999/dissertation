@@ -1,12 +1,10 @@
 stream {
 	ssl_preread on;
 	ssl_echkeydir /keys/tcd;
-	server {
-		listen 172.0.0.5:443;
-		proxy_pass $backend;
-	}
-	map $ssl_preread_server_name $backend {
+	server { listen 172.0.0.5:443; proxy_pass $origin; }
+	map $ssl_preread_server_name $origin {
 		dcu.example.com 172.0.1.2:443;
+		tcd.example.com 172.0.1.5:443;
 		ucd.example.com 172.0.1.8:443;
 	}
 }
@@ -20,9 +18,6 @@ http {
 		ssl_certificate /keys/tcd/tcd.crt;
 		ssl_certificate_key /keys/tcd/tcd.key;
 		ssl_protocols TLSv1.3;
-		location / {
-			ssi on;
-			index index.html index.htm;
-		}
+		location / { ssi on; index index.html; }
 	}
 }

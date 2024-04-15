@@ -14,5 +14,6 @@ options {
 
 zone "example.com" {
 	type master;
+	update-policy local;
 	file "/var/lib/bind/db.example.com";
 };

@@ -5,17 +5,16 @@ $TTL 3600
 @ IN NS dns
 
 dcu.ech IN A 172.0.0.2
+dcu IN HTTPS 1 dcu.ech ech=<DCU_ECHConfig>
+dcu IN HTTPS 1 tcd.ech ech=<TCD_ECHConfig>
+dcu IN HTTPS 1 ucd.ech ech=<UCD_ECHConfig>
+
 tcd.ech IN A 172.0.0.5
+tcd IN HTTPS 1 dcu.ech ech=<DCU_ECHConfig>
+tcd IN HTTPS 1 tcd.ech ech=<TCD_ECHConfig>
+tcd IN HTTPS 1 ucd.ech ech=<UCD_ECHConfig>
+
 ucd.ech IN A 172.0.0.8
-
-dcu IN HTTPS 1 dcu.ech ech=<DCU ECHConfig>
-dcu IN HTTPS 1 tcd.ech ech=<TCD ECHConfig>
-dcu IN HTTPS 1 ucd.ech ech=<UCD ECHConfig>
-
-tcd IN HTTPS 1 dcu.ech ech=<DCU ECHConfig>
-tcd IN HTTPS 1 tcd.ech ech=<TCD ECHConfig>
-tcd IN HTTPS 1 ucd.ech ech=<UCD ECHConfig>
-
-ucd IN HTTPS 1 dcu.ech ech=<DCU ECHConfig>
-ucd IN HTTPS 1 tcd.ech ech=<TCD ECHConfig>
-ucd IN HTTPS 1 ucd.ech ech=<UCD ECHConfig>
+ucd IN HTTPS 1 dcu.ech ech=<DCU_ECHConfig>
+ucd IN HTTPS 1 tcd.ech ech=<TCD_ECHConfig>
+ucd IN HTTPS 1 ucd.ech ech=<UCD_ECHConfig>

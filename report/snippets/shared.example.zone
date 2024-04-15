@@ -7,15 +7,14 @@ $TTL 3600
 dcu IN A 172.0.0.2
 dcu IN A 172.0.0.5
 dcu IN A 172.0.0.8
+dcu IN HTTPS 1 . ech=<Shared_ECHConfig>
 
 tcd IN A 172.0.0.2
 tcd IN A 172.0.0.5
 tcd IN A 172.0.0.8
+tcd IN HTTPS 1 . ech=<Shared_ECHConfig>
 
 ucd IN A 172.0.0.2
 ucd IN A 172.0.0.5
 ucd IN A 172.0.0.8
-
-dcu IN HTTPS 1 . ech=<Shared ECHConfig>
-tcd IN HTTPS 1 . ech=<Shared ECHConfig>
-ucd IN HTTPS 1 . ech=<Shared ECHConfig>
+ucd IN HTTPS 1 . ech=<Shared_ECHConfig>
